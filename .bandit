@@ -1,0 +1,80 @@
+[bandit]
+exclude_dirs = ["tests", ".venv", "venv", "build", "dist"]
+skips = [
+    # B101: Test for use of assert
+    "B101",
+    # B601: Test for shell injection within Popen
+    "B601",
+]
+
+# Security test configuration
+tests = [
+    "B102",  # Test for exec used
+    "B103",  # Test for set_bad_file_permissions
+    "B104",  # Test for binding to all interfaces
+    "B105",  # Test for hardcoded password strings
+    "B106",  # Test for hardcoded password funcargs
+    "B107",  # Test for hardcoded password default funcargs
+    "B108",  # Test for insecure temp file
+    "B110",  # Test for a pass in the except block
+    "B112",  # Test for a continue in the except block
+    "B201",  # Test for flask debug true
+    "B301",  # Test for pickle usage
+    "B302",  # Test for marshal usage
+    "B303",  # Test for MD5 usage
+    "B304",  # Test for insecure cipher usage
+    "B305",  # Test for insecure cipher modes
+    "B306",  # Test for insecure mktemp usage
+    "B307",  # Test for eval usage
+    "B308",  # Test for mark_safe usage
+    "B309",  # Test for httpsconnection usage
+    "B310",  # Test for urllib urlopen usage
+    "B311",  # Test for random usage
+    "B312",  # Test for telnetlib usage
+    "B313",  # Test for xml usage
+    "B314",  # Test for xml usage
+    "B315",  # Test for xml usage
+    "B316",  # Test for xml usage
+    "B317",  # Test for xml usage
+    "B318",  # Test for xml usage
+    "B319",  # Test for xml usage
+    "B320",  # Test for xml usage
+    "B321",  # Test for ftplib usage
+    "B322",  # Test for input usage
+    "B323",  # Test for unverified context usage
+    "B324",  # Test for hashlib usage
+    "B401",  # Test for import of telnetlib
+    "B402",  # Test for import of ftplib
+    "B403",  # Test for import of pickle
+    "B404",  # Test for import of subprocess
+    "B405",  # Test for import of xml
+    "B406",  # Test for import of xml
+    "B407",  # Test for import of xml
+    "B408",  # Test for import of xml
+    "B409",  # Test for import of xml
+    "B410",  # Test for import of xml
+    "B411",  # Test for import of xml
+    "B412",  # Test for import of telnetlib
+    "B413",  # Test for import of pycrypto
+    "B501",  # Test for request with verify disabled
+    "B502",  # Test for ssl with bad version
+    "B503",  # Test for ssl with bad defaults
+    "B504",  # Test for ssl with no version
+    "B505",  # Test for weak cryptographic key
+    "B506",  # Test for yaml load
+    "B507",  # Test for ssh usage
+    "B601",  # Test for shell injection
+    "B602",  # Test for subprocess popen
+    "B603",  # Test for subprocess without shell
+    "B604",  # Test for any other function with shell
+    "B605",  # Test for starting a process with a shell
+    "B606",  # Test for starting a process without a shell
+    "B607",  # Test for starting a process with a partial path
+    "B608",  # Test for SQL injection
+    "B609",  # Test for wildcard injection
+    "B610",  # Test for django extra used
+    "B611",  # Test for django rawsql used
+    "B701",  # Test for jinja2 autoescape disabled
+    "B702",  # Test for use of mako templates
+    "B703",  # Test for django mark safe
+]

@@ -1,0 +1,438 @@
+{
+  "multi_region_deployment": {
+    "description": "マルチリージョン展開用設定テンプレート",
+    "regions": {
+      "primary": {
+        "region": "ap-northeast-1",
+        "profile": "production-tokyo",
+        "calendars": ["japanese-holidays-2024", "japanese-holidays-2025"],
+        "backup_enabled": true
+      },
+      "secondary": {
+        "region": "us-east-1",
+        "profile": "production-virginia",
+        "calendars": ["japanese-holidays-2024", "japanese-holidays-2025"],
+        "backup_enabled": false,
+        "sync_from_primary": true
+      },
+      "disaster_recovery": {
+        "region": "eu-west-1",
+        "profile": "production-ireland",
+        "calendars": ["japanese-holidays-2024"],
+        "backup_enabled": false,
+        "sync_from_primary": true,
+        "active_only_on_failure": true
+      }
+    },
+    "sync_strategy": {
+      "method": "cross_region_replication",
+      "schedule": "0 2 * * *",
+      "conflict_resolution": "primary_wins",
+      "retry_attempts": 3,
+      "notification_on_failure": true
+    },
+    "monitoring": {
+      "cross_region_health_check": true,
+      "latency_monitoring": true,
+      "consistency_checks": true,
+      "alert_thresholds": {
+        "sync_delay_minutes": 30,
+        "failure_rate_percent": 5
+      }
+    }
+  },
+
+  "microservices_architecture": {
+    "description": "マイクロサービス環境用設定",
+    "services": {
+      "holiday_service": {
+        "port": 8001,
+        "endpoints": ["/api/holidays", "/api/check"],
+        "rate_limiting": {
+          "requests_per_minute": 1000,
+          "burst_size": 100
+        },
+        "caching": {
+          "redis_url": "redis://holiday-cache:6379",
+          "ttl_seconds": 3600
+        }
+      },
+      "calendar_service": {
+        "port": 8002,
+        "endpoints": ["/api/calendars", "/api/generate"],
+        "rate_limiting": {
+          "requests_per_minute": 500,
+          "burst_size": 50
+        },
+        "aws_integration": {
+          "assume_role": "arn:aws:iam::123456789012:role/CalendarServiceRole",
+          "region": "ap-northeast-1"
+        }
+      },
+      "analytics_service": {
+        "port": 8003,
+        "endpoints": ["/api/analytics", "/api/reports"],
+        "database": {
+          "url": "postgresql://analytics:password@analytics-db:5432/holiday_analytics",
+          "pool_size": 10
+        }
+      }
+    },
+    "service_mesh": {
+      "enabled": true,
+      "mesh_type": "istio",
+      "mtls_enabled": true,
+      "observability": {
+        "tracing": true,
+        "metrics": true,
+        "logging": true
+      }
+    },
+    "load_balancing": {
+      "algorithm": "round_robin",
+      "health_check_path": "/health",
+      "health_check_interval": "30s"
+    }
+  },
+
+  "enterprise_security": {
+    "description": "エンタープライズセキュリティ設定",
+    "authentication": {
+      "method": "oauth2",
+      "provider": "active_directory",
+      "token_validation": {
+        "issuer": "https://login.microsoftonline.com/tenant-id/v2.0",
+        "audience": "api://holiday-calendar-api",
+        "algorithms": ["RS256"]
+      },
+      "role_based_access": {
+        "admin": ["read", "write", "delete", "manage"],
+        "operator": ["read", "write"],
+        "viewer": ["read"]
+      }
+    },
+    "encryption": {
+      "data_at_rest": {
+        "enabled": true,
+        "kms_key_id": "arn:aws:kms:ap-northeast-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+        "algorithm": "AES-256-GCM"
+      },
+      "data_in_transit": {
+        "tls_version": "1.3",
+        "cipher_suites": ["TLS_AES_256_GCM_SHA384", "TLS_CHACHA20_POLY1305_SHA256"],
+        "certificate_validation": true
+      }
+    },
+    "audit_logging": {
+      "enabled": true,
+      "log_level": "INFO",
+      "include_request_body": false,
+      "include_response_body": false,
+      "retention_days": 2555,
+      "storage": {
+        "type": "s3",
+        "bucket": "company-audit-logs",
+        "prefix": "holiday-calendar/"
+      }
+    },
+    "network_security": {
+      "ip_whitelist": ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"],
+      "rate_limiting": {
+        "global_limit": 10000,
+        "per_ip_limit": 100,
+        "window_minutes": 1
+      },
+      "ddos_protection": {
+        "enabled": true,
+        "threshold_requests_per_second": 1000
+      }
+    },
+    "compliance": {
+      "frameworks": ["SOC2", "ISO27001", "GDPR"],
+      "data_classification": "internal",
+      "retention_policy": {
+        "logs": "7_years",
+        "cache": "30_days",
+        "backups": "3_years"
+      }
+    }
+  },
+
+  "high_availability": {
+    "description": "高可用性構成設定",
+    "deployment": {
+      "strategy": "blue_green",
+      "min_healthy_instances": 2,
+      "max_unavailable_percent": 25,
+      "health_check": {
+        "path": "/health",
+        "interval": "10s",
+        "timeout": "5s",
+        "healthy_threshold": 2,
+        "unhealthy_threshold": 3
+      }
+    },
+    "auto_scaling": {
+      "enabled": true,
+      "min_instances": 2,
+      "max_instances": 10,
+      "target_cpu_percent": 70,
+      "scale_up_cooldown": "300s",
+      "scale_down_cooldown": "600s"
+    },
+    "circuit_breaker": {
+      "enabled": true,
+      "failure_threshold": 5,
+      "recovery_timeout": "30s",
+      "half_open_max_calls": 3
+    },
+    "backup_strategy": {
+      "automated_backups": true,
+      "backup_schedule": "0 1 * * *",
+      "retention_days": 30,
+      "cross_region_backup": true,
+      "backup_encryption": true
+    },
+    "disaster_recovery": {
+      "rpo_minutes": 15,
+      "rto_minutes": 60,
+      "failover_strategy": "automatic",
+      "data_replication": "synchronous"
+    }
+  },
+
+  "performance_optimized": {
+    "description": "パフォーマンス最適化設定",
+    "caching": {
+      "levels": {
+        "l1_memory": {
+          "enabled": true,
+          "max_size_mb": 128,
+          "ttl_seconds": 300
+        },
+        "l2_redis": {
+          "enabled": true,
+          "cluster_mode": true,
+          "nodes": ["redis-1:6379", "redis-2:6379", "redis-3:6379"],
+          "ttl_seconds": 3600
+        },
+        "l3_cdn": {
+          "enabled": true,
+          "provider": "cloudfront",
+          "ttl_seconds": 86400,
+          "cache_behaviors": {
+            "/api/holidays/*": 3600,
+            "/api/check/*": 300
+          }
+        }
+      },
+      "cache_warming": {
+        "enabled": true,
+        "schedule": "0 0 * * *",
+        "preload_years": [2024, 2025, 2026]
+      }
+    },
+    "database_optimization": {
+      "connection_pooling": {
+        "min_connections": 5,
+        "max_connections": 50,
+        "idle_timeout": "300s"
+      },
+      "query_optimization": {
+        "prepared_statements": true,
+        "query_cache": true,
+        "index_hints": true
+      },
+      "read_replicas": {
+        "enabled": true,
+        "count": 2,
+        "read_write_split": true
+      }
+    },
+    "async_processing": {
+      "enabled": true,
+      "queue_system": "sqs",
+      "worker_processes": 4,
+      "batch_size": 100,
+      "retry_policy": {
+        "max_attempts": 3,
+        "backoff_multiplier": 2
+      }
+    }
+  },
+
+  "development_team": {
+    "description": "開発チーム用設定",
+    "environments": {
+      "local": {
+        "aws": {
+          "region": "us-east-1",
+          "profile": "localstack",
+          "endpoint_url": "http://localhost:4566"
+        },
+        "database": {
+          "url": "sqlite:///./dev.db"
+        },
+        "cache": {
+          "type": "memory"
+        },
+        "logging": {
+          "level": "DEBUG",
+          "format": "detailed"
+        }
+      },
+      "development": {
+        "aws": {
+          "region": "us-west-2",
+          "profile": "dev-team"
+        },
+        "database": {
+          "url": "postgresql://dev:password@dev-db:5432/holiday_dev"
+        },
+        "cache": {
+          "type": "redis",
+          "url": "redis://dev-cache:6379"
+        },
+        "feature_flags": {
+          "new_ui": true,
+          "experimental_api": true,
+          "performance_monitoring": false
+        }
+      },
+      "staging": {
+        "aws": {
+          "region": "us-east-1",
+          "profile": "staging"
+        },
+        "database": {
+          "url": "postgresql://staging:password@staging-db:5432/holiday_staging"
+        },
+        "cache": {
+          "type": "redis",
+          "url": "redis://staging-cache:6379"
+        },
+        "feature_flags": {
+          "new_ui": false,
+          "experimental_api": false,
+          "performance_monitoring": true
+        }
+      }
+    },
+    "testing": {
+      "unit_tests": {
+        "coverage_threshold": 80,
+        "parallel_execution": true
+      },
+      "integration_tests": {
+        "test_data_refresh": true,
+        "mock_external_services": true
+      },
+      "e2e_tests": {
+        "browser": "headless_chrome",
+        "parallel_sessions": 3
+      }
+    },
+    "ci_cd": {
+      "pipeline_stages": ["lint", "test", "security_scan", "build", "deploy"],
+      "deployment_strategy": "rolling",
+      "approval_required": {
+        "staging": false,
+        "production": true
+      }
+    }
+  },
+
+  "monitoring_observability": {
+    "description": "監視・可観測性設定",
+    "metrics": {
+      "collection": {
+        "interval": "15s",
+        "retention": "30d",
+        "high_cardinality_limit": 10000
+      },
+      "exporters": {
+        "prometheus": {
+          "enabled": true,
+          "port": 9090,
+          "path": "/metrics"
+        },
+        "cloudwatch": {
+          "enabled": true,
+          "namespace": "HolidayCalendar",
+          "dimensions": ["Environment", "Service", "Region"]
+        }
+      },
+      "custom_metrics": {
+        "holiday_requests_total": "counter",
+        "calendar_generation_duration": "histogram",
+        "cache_hit_ratio": "gauge",
+        "aws_api_errors": "counter"
+      }
+    },
+    "logging": {
+      "structured": true,
+      "format": "json",
+      "correlation_id": true,
+      "sampling": {
+        "debug": 0.1,
+        "info": 1.0,
+        "warn": 1.0,
+        "error": 1.0
+      },
+      "destinations": {
+        "stdout": true,
+        "file": "/var/log/holiday-calendar.log",
+        "elasticsearch": "https://es-cluster:9200",
+        "cloudwatch": "holiday-calendar-logs"
+      }
+    },
+    "tracing": {
+      "enabled": true,
+      "sampler": "probabilistic",
+      "sampling_rate": 0.1,
+      "jaeger": {
+        "endpoint": "http://jaeger:14268/api/traces"
+      },
+      "aws_xray": {
+        "enabled": true,
+        "sampling_rules": [
+          {
+            "description": "Holiday API",
+            "service_name": "holiday-service",
+            "http_method": "*",
+            "url_path": "/api/holidays/*",
+            "fixed_target": 1,
+            "rate": 0.1
+          }
+        ]
+      }
+    },
+    "alerting": {
+      "channels": {
+        "slack": "https://hooks.slack.com/services/YOUR_TEAM_ID/YOUR_CHANNEL_ID/YOUR_WEBHOOK_TOKEN",
+        "email": ["ops@company.com", "dev@company.com"],
+        "pagerduty": "integration-key"
+      },
+      "rules": [
+        {
+          "name": "High Error Rate",
+          "condition": "error_rate > 5%",
+          "duration": "5m",
+          "severity": "critical"
+        },
+        {
+          "name": "High Latency",
+          "condition": "p95_latency > 1s",
+          "duration": "10m",
+          "severity": "warning"
+        },
+        {
+          "name": "AWS API Failures",
+          "condition": "aws_api_errors > 10",
+          "duration": "5m",
+          "severity": "critical"
+        }
+      ]
+    }
+  }
+}

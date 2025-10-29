@@ -1,0 +1,51 @@
+# Development requirements for AWS SSM Calendar ICS Generator
+# Install with: pip install -r requirements-dev.txt
+
+# Include production requirements
+-r requirements.txt
+
+# Testing frameworks
+pytest>=7.0.0
+pytest-cov>=4.0.0
+pytest-mock>=3.10.0
+pytest-xdist>=3.0.0
+pytest-benchmark>=4.0.0
+
+# Code formatting
+black>=23.0.0
+isort>=5.12.0
+
+# Linting
+flake8>=6.0.0
+flake8-docstrings>=1.7.0
+flake8-import-order>=0.18.0
+flake8-bugbear>=23.0.0
+pydocstyle>=6.3.0
+
+# Type checking
+mypy>=1.0.0
+types-requests>=2.28.0
+types-python-dateutil>=2.8.0
+types-pytz>=2023.3.0
+
+# Security scanning
+bandit>=1.7.0
+safety>=2.3.0
+
+# Development tools
+pre-commit>=3.0.0
+tox>=4.0.0
+build>=0.10.0
+twine>=4.0.0
+
+# Documentation
+sphinx>=5.0.0
+sphinx-rtd-theme>=1.2.0
+sphinx-autodoc-typehints>=1.19.0
+
+# Performance testing
+pytest-benchmark>=4.0.0
+
+# Debugging and profiling
+ipdb>=0.13.0
+memory-profiler>=0.60.0

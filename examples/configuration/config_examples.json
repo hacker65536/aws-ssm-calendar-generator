@@ -1,0 +1,298 @@
+{
+  "development": {
+    "description": "開発環境用設定",
+    "aws": {
+      "region": "us-east-1",
+      "profile": "development"
+    },
+    "calendar": {
+      "default_timezone": "Asia/Tokyo",
+      "output_format": "ics",
+      "exclude_sunday_holidays": true
+    },
+    "output": {
+      "directory": "./output/dev",
+      "filename_template": "dev_{calendar_name}_{date}.ics",
+      "backup_existing": true
+    },
+    "logging": {
+      "level": "DEBUG",
+      "format": "detailed",
+      "enable_performance_monitoring": true
+    },
+    "cache": {
+      "directory": "~/.aws-ssm-calendar/cache/dev",
+      "expiry_days": 7,
+      "auto_refresh": true
+    }
+  },
+
+  "production": {
+    "description": "本番環境用設定",
+    "aws": {
+      "region": "ap-northeast-1",
+      "profile": "production"
+    },
+    "calendar": {
+      "default_timezone": "Asia/Tokyo",
+      "output_format": "ics",
+      "exclude_sunday_holidays": false
+    },
+    "output": {
+      "directory": "/var/lib/holiday-calendars",
+      "filename_template": "{calendar_name}_{date}.ics",
+      "backup_existing": true,
+      "compression": true
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "json",
+      "enable_performance_monitoring": false,
+      "log_file": "/var/log/holiday-calendar.log"
+    },
+    "cache": {
+      "directory": "/var/cache/holiday-calendar",
+      "expiry_days": 30,
+      "auto_refresh": false
+    },
+    "security": {
+      "validate_inputs": true,
+      "secure_file_permissions": true,
+      "https_only": true
+    }
+  },
+
+  "testing": {
+    "description": "テスト環境用設定",
+    "aws": {
+      "region": "us-west-2",
+      "profile": "testing"
+    },
+    "calendar": {
+      "default_timezone": "UTC",
+      "output_format": "ics",
+      "exclude_sunday_holidays": true
+    },
+    "output": {
+      "directory": "./test_output",
+      "filename_template": "test_{calendar_name}_{timestamp}.ics",
+      "backup_existing": false
+    },
+    "logging": {
+      "level": "WARNING",
+      "format": "simple",
+      "enable_performance_monitoring": false
+    },
+    "cache": {
+      "directory": "./test_cache",
+      "expiry_days": 1,
+      "auto_refresh": true
+    },
+    "testing": {
+      "mock_aws_responses": true,
+      "use_test_data": true,
+      "fast_mode": true
+    }
+  },
+
+  "batch_processing": {
+    "description": "バッチ処理用設定",
+    "aws": {
+      "region": "us-east-1",
+      "profile": null
+    },
+    "calendar": {
+      "default_timezone": "Asia/Tokyo",
+      "output_format": "ics",
+      "exclude_sunday_holidays": true
+    },
+    "output": {
+      "directory": "./output/batch",
+      "filename_template": "batch_{calendar_name}_{year}.ics",
+      "backup_existing": true
+    },
+    "batch": {
+      "parallel_processing": true,
+      "max_workers": 8,
+      "chunk_size": 5,
+      "enable_monitoring": false,
+      "generate_summary": true,
+      "retry_failed": true,
+      "max_retries": 3
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "structured",
+      "enable_performance_monitoring": true
+    },
+    "performance": {
+      "memory_limit_mb": 512,
+      "timeout_seconds": 300,
+      "gc_frequency": 5
+    }
+  },
+
+  "ci_cd": {
+    "description": "CI/CD パイプライン用設定",
+    "aws": {
+      "region": "us-east-1",
+      "profile": null,
+      "use_iam_role": true
+    },
+    "calendar": {
+      "default_timezone": "Asia/Tokyo",
+      "output_format": "ics",
+      "exclude_sunday_holidays": false
+    },
+    "output": {
+      "directory": "./artifacts",
+      "filename_template": "{calendar_name}_{version}.ics",
+      "backup_existing": false
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "json",
+      "enable_performance_monitoring": false,
+      "output_to_stdout": true
+    },
+    "validation": {
+      "strict_mode": true,
+      "validate_ics_format": true,
+      "check_aws_compatibility": true
+    },
+    "artifacts": {
+      "generate_checksums": true,
+      "create_manifest": true,
+      "upload_to_s3": false
+    }
+  },
+
+  "docker": {
+    "description": "Docker コンテナ用設定",
+    "aws": {
+      "region": "${AWS_REGION:-us-east-1}",
+      "profile": null
+    },
+    "calendar": {
+      "default_timezone": "${TIMEZONE:-Asia/Tokyo}",
+      "output_format": "ics",
+      "exclude_sunday_holidays": "${EXCLUDE_SUNDAYS:-true}"
+    },
+    "output": {
+      "directory": "/app/output",
+      "filename_template": "{calendar_name}_{date}.ics",
+      "backup_existing": false
+    },
+    "logging": {
+      "level": "${LOG_LEVEL:-INFO}",
+      "format": "json",
+      "enable_performance_monitoring": false,
+      "output_to_stdout": true
+    },
+    "cache": {
+      "directory": "/app/cache",
+      "expiry_days": 30,
+      "auto_refresh": true
+    },
+    "health_check": {
+      "enabled": true,
+      "endpoint": "/health",
+      "interval_seconds": 30
+    }
+  },
+
+  "minimal": {
+    "description": "最小限の設定例",
+    "aws": {
+      "region": "us-east-1"
+    },
+    "calendar": {
+      "exclude_sunday_holidays": true
+    },
+    "output": {
+      "directory": "./output"
+    }
+  },
+
+  "custom_enterprise": {
+    "description": "企業向けカスタム設定",
+    "aws": {
+      "region": "ap-northeast-1",
+      "profile": "company-prod",
+      "assume_role_arn": "arn:aws:iam::123456789012:role/HolidayCalendarRole"
+    },
+    "calendar": {
+      "default_timezone": "Asia/Tokyo",
+      "output_format": "ics",
+      "exclude_sunday_holidays": false,
+      "custom_holidays": [
+        {
+          "date": "2024-12-30",
+          "name": "年末休業",
+          "type": "company"
+        },
+        {
+          "date": "2024-12-31",
+          "name": "年末休業",
+          "type": "company"
+        }
+      ]
+    },
+    "output": {
+      "directory": "/shared/calendars",
+      "filename_template": "company_{calendar_name}_{year}_{version}.ics",
+      "backup_existing": true,
+      "compression": true,
+      "encryption": {
+        "enabled": true,
+        "key_id": "alias/holiday-calendar-key"
+      }
+    },
+    "logging": {
+      "level": "INFO",
+      "format": "json",
+      "enable_performance_monitoring": true,
+      "log_file": "/var/log/company/holiday-calendar.log",
+      "rotate_logs": true,
+      "max_log_size_mb": 100
+    },
+    "cache": {
+      "directory": "/var/cache/company/holiday-calendar",
+      "expiry_days": 30,
+      "auto_refresh": false,
+      "distributed_cache": {
+        "enabled": true,
+        "redis_url": "redis://cache.company.com:6379"
+      }
+    },
+    "security": {
+      "validate_inputs": true,
+      "secure_file_permissions": true,
+      "https_only": true,
+      "audit_logging": true,
+      "ip_whitelist": ["10.0.0.0/8", "172.16.0.0/12"]
+    },
+    "monitoring": {
+      "enabled": true,
+      "metrics_endpoint": "https://metrics.company.com/holiday-calendar",
+      "alert_on_errors": true,
+      "performance_thresholds": {
+        "max_generation_time_seconds": 30,
+        "max_memory_usage_mb": 256
+      }
+    },
+    "integration": {
+      "slack_webhook": "https://hooks.slack.com/services/YOUR_TEAM_ID/YOUR_CHANNEL_ID/YOUR_WEBHOOK_TOKEN",
+      "email_notifications": {
+        "enabled": true,
+        "smtp_server": "smtp.company.com",
+        "recipients": ["admin@company.com"]
+      },
+      "jira_integration": {
+        "enabled": true,
+        "server": "https://company.atlassian.net",
+        "project_key": "HCAL"
+      }
+    }
+  }
+}

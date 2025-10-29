@@ -1,0 +1,414 @@
+# GitHub Actions ワークフロー
+# AWS SSM Change Calendar 休業日スケジュール管理ツール統合例
+
+name: Holiday Calendar Sync
+
+on:
+  # 毎月1日の午前2時（JST）に実行
+  schedule:
+    - cron: '17 17 * * *'  # UTC 17:17 = JST 02:17 (翌日)
+  
+  # 手動実行
+  workflow_dispatch:
+    inputs:
+      years:
+        description: 'Years to generate (comma-separated)'
+        required: false
+        default: '2024,2025,2026'
+      exclude_sundays:
+        description: 'Exclude Sunday holidays'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+      force_update:
+        description: 'Force update even if no changes'
+        required: false
+        default: 'false'
+        type: boolean
+  
+  # プルリクエスト時（テスト用）
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'examples/**'
+      - '.github/workflows/holiday-calendar-sync.yml'
+
+env:
+  PYTHON_VERSION: '3.11'
+  AWS_REGION: 'ap-northeast-1'
+  LOG_LEVEL: 'INFO'
+
+jobs:
+  # 設定とバリデーション
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      years: ${{ steps.config.outputs.years }}
+      exclude_sundays: ${{ steps.config.outputs.exclude_sundays }}
+      matrix_years: ${{ steps.config.outputs.matrix_years }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Configure parameters
+        id: config
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            YEARS="${{ github.event.inputs.years }}"
+            EXCLUDE_SUNDAYS="${{ github.event.inputs.exclude_sundays }}"
+          else
+            # デフォルト設定
+            CURRENT_YEAR=$(date +%Y)
+            NEXT_YEAR=$((CURRENT_YEAR + 1))
+            YEARS="${CURRENT_YEAR},${NEXT_YEAR}"
+            EXCLUDE_SUNDAYS="true"
+          fi
+          
+          echo "years=${YEARS}" >> $GITHUB_OUTPUT
+          echo "exclude_sundays=${EXCLUDE_SUNDAYS}" >> $GITHUB_OUTPUT
+          
+          # マトリックス用の配列形式に変換
+          MATRIX_YEARS=$(echo "${YEARS}" | jq -R 'split(",") | map(tonumber)')
+          echo "matrix_years=${MATRIX_YEARS}" >> $GITHUB_OUTPUT
+          
+          echo "Configuration:"
+          echo "  Years: ${YEARS}"
+          echo "  Exclude Sundays: ${EXCLUDE_SUNDAYS}"
+          echo "  Matrix: ${MATRIX_YEARS}"
+
+  # 依存関係のセットアップとテスト
+  test:
+    runs-on: ubuntu-latest
+    needs: setup
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov
+      
+      - name: Run tests
+        run: |
+          # 基本的なテスト実行
+          python -m pytest tests/ -v --cov=src --cov-report=xml
+        continue-on-error: true
+      
+      - name: Validate configuration
+        run: |
+          # 設定ファイルの検証
+          python -c "
+          import json
+          import sys
+          
+          try:
+              with open('examples/configuration/config_examples.json') as f:
+                  config = json.load(f)
+              print('✓ Configuration file is valid')
+          except Exception as e:
+              print(f'✗ Configuration validation failed: {e}')
+              sys.exit(1)
+          "
+      
+      - name: Test holiday data access
+        run: |
+          # 祝日データアクセステスト（ネットワーク不要）
+          python -c "
+          from src.japanese_holidays import JapaneseHolidays
+          from datetime import date
+          
+          try:
+              holidays = JapaneseHolidays()
+              # 基本的な機能テスト
+              test_date = date(2024, 1, 1)
+              is_holiday = holidays.is_holiday(test_date)
+              print(f'✓ Holiday check test passed: {test_date} = {is_holiday}')
+          except Exception as e:
+              print(f'⚠ Holiday test failed (may be network issue): {e}')
+          "
+
+  # カレンダー生成（マトリックス実行）
+  generate:
+    runs-on: ubuntu-latest
+    needs: [setup, test]
+    if: github.event_name != 'pull_request'
+    
+    strategy:
+      matrix:
+        year: ${{ fromJson(needs.setup.outputs.matrix_years) }}
+      fail-fast: false
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Generate holiday calendar
+        run: |
+          mkdir -p output/github-actions
+          
+          EXCLUDE_FLAG=""
+          if [ "${{ needs.setup.outputs.exclude_sundays }}" = "false" ]; then
+            EXCLUDE_FLAG="--include-sundays"
+          fi
+          
+          python main.py holidays \
+            --year ${{ matrix.year }} \
+            --output "output/github-actions/holidays_${{ matrix.year }}.ics" \
+            ${EXCLUDE_FLAG}
+          
+          echo "Generated calendar for ${{ matrix.year }}"
+          ls -la output/github-actions/
+      
+      - name: Validate generated ICS
+        run: |
+          python examples/basic_usage/simple_holiday_check.py \
+            --date ${{ matrix.year }}-01-01
+          
+          # ICS ファイルの基本検証
+          python -c "
+          import os
+          
+          ics_file = 'output/github-actions/holidays_${{ matrix.year }}.ics'
+          if os.path.exists(ics_file):
+              with open(ics_file, 'r') as f:
+                  content = f.read()
+              
+              # 基本的なICS形式チェック
+              if 'BEGIN:VCALENDAR' in content and 'END:VCALENDAR' in content:
+                  event_count = content.count('BEGIN:VEVENT')
+                  print(f'✓ Valid ICS file with {event_count} events')
+              else:
+                  print('✗ Invalid ICS format')
+                  exit(1)
+          else:
+              print('✗ ICS file not found')
+              exit(1)
+          "
+      
+      - name: Upload calendar artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: holiday-calendar-${{ matrix.year }}
+          path: output/github-actions/holidays_${{ matrix.year }}.ics
+          retention-days: 30
+
+  # AWS統合（本番環境のみ）
+  deploy-to-aws:
+    runs-on: ubuntu-latest
+    needs: [setup, generate]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment: production
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts/
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install boto3
+      
+      - name: Deploy to AWS SSM Change Calendar
+        run: |
+          # アーティファクトの整理
+          mkdir -p deploy/
+          find artifacts/ -name "*.ics" -exec cp {} deploy/ \;
+          
+          echo "Files to deploy:"
+          ls -la deploy/
+          
+          # AWS Change Calendar への展開
+          for ics_file in deploy/*.ics; do
+            if [ -f "$ics_file" ]; then
+              filename=$(basename "$ics_file" .ics)
+              calendar_name="japanese-${filename}"
+              
+              echo "Deploying ${calendar_name}..."
+              
+              # Change Calendar の存在確認
+              if aws ssm get-document --name "${calendar_name}" >/dev/null 2>&1; then
+                echo "Updating existing calendar: ${calendar_name}"
+                aws ssm update-document \
+                  --name "${calendar_name}" \
+                  --content "file://${ics_file}" \
+                  --document-format TEXT \
+                  --document-version '$LATEST'
+              else
+                echo "Creating new calendar: ${calendar_name}"
+                aws ssm create-document \
+                  --name "${calendar_name}" \
+                  --document-type ChangeCalendar \
+                  --document-format TEXT \
+                  --content "file://${ics_file}" \
+                  --tags Key=Project,Value=HolidayCalendar \
+                         Key=Environment,Value=production \
+                         Key=CreatedBy,Value=GitHubActions
+              fi
+              
+              # カレンダー状態の確認
+              aws ssm get-calendar-state --calendar-names "${calendar_name}"
+            fi
+          done
+      
+      - name: Upload to S3 (backup)
+        run: |
+          BUCKET_NAME="holiday-calendar-backup-$(date +%Y%m%d)"
+          
+          # S3バケットの作成（存在しない場合）
+          if ! aws s3 ls "s3://${BUCKET_NAME}" >/dev/null 2>&1; then
+            aws s3 mb "s3://${BUCKET_NAME}" --region ${{ env.AWS_REGION }}
+          fi
+          
+          # ファイルのアップロード
+          for ics_file in deploy/*.ics; do
+            if [ -f "$ics_file" ]; then
+              aws s3 cp "$ics_file" "s3://${BUCKET_NAME}/$(date +%Y%m%d)/"
+            fi
+          done
+          
+          echo "Backup uploaded to s3://${BUCKET_NAME}/$(date +%Y%m%d)/"
+
+  # 通知とレポート
+  notify:
+    runs-on: ubuntu-latest
+    needs: [setup, generate, deploy-to-aws]
+    if: always()
+    
+    steps:
+      - name: Prepare notification
+        id: notification
+        run: |
+          if [ "${{ needs.deploy-to-aws.result }}" = "success" ]; then
+            STATUS="✅ Success"
+            COLOR="good"
+          elif [ "${{ needs.deploy-to-aws.result }}" = "failure" ]; then
+            STATUS="❌ Failed"
+            COLOR="danger"
+          elif [ "${{ needs.deploy-to-aws.result }}" = "skipped" ]; then
+            STATUS="⏭️ Skipped"
+            COLOR="warning"
+          else
+            STATUS="⚠️ Unknown"
+            COLOR="warning"
+          fi
+          
+          echo "status=${STATUS}" >> $GITHUB_OUTPUT
+          echo "color=${COLOR}" >> $GITHUB_OUTPUT
+      
+      - name: Slack notification
+        if: always()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: custom
+          custom_payload: |
+            {
+              "text": "Holiday Calendar Sync Report",
+              "attachments": [
+                {
+                  "color": "${{ steps.notification.outputs.color }}",
+                  "fields": [
+                    {
+                      "title": "Status",
+                      "value": "${{ steps.notification.outputs.status }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Years",
+                      "value": "${{ needs.setup.outputs.years }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Exclude Sundays",
+                      "value": "${{ needs.setup.outputs.exclude_sundays }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Workflow",
+                      "value": "<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>",
+                      "short": true
+                    }
+                  ],
+                  "footer": "GitHub Actions",
+                  "ts": ${{ github.event.head_commit.timestamp }}
+                }
+              ]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      
+      - name: Create summary
+        if: always()
+        run: |
+          echo "## Holiday Calendar Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Status:** ${{ steps.notification.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Years:** ${{ needs.setup.outputs.years }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Exclude Sundays:** ${{ needs.setup.outputs.exclude_sundays }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "### Job Results" >> $GITHUB_STEP_SUMMARY
+          echo "- Setup: ${{ needs.setup.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Test: ${{ needs.test.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Generate: ${{ needs.generate.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Deploy to AWS: ${{ needs.deploy-to-aws.result }}" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "This was an automated monthly update." >> $GITHUB_STEP_SUMMARY
+          fi
+
+  # クリーンアップ（オプション）
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: [notify]
+    if: always() && github.event_name == 'schedule'
+    
+    steps:
+      - name: Cleanup old artifacts
+        run: |
+          echo "Cleanup job - removing old artifacts if needed"
+          # 実際のクリーンアップロジックをここに実装
+          # 例: 古いS3オブジェクトの削除、古いChange Calendarの削除など

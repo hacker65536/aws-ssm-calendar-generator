@@ -1,0 +1,393 @@
+{
+  "basic_ssm_policy": {
+    "description": "基本的なSSM Change Calendar操作権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "SSMChangeCalendarBasicAccess",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:GetCalendarState"
+        ],
+        "Resource": "*"
+      }
+    ]
+  },
+
+  "read_only_policy": {
+    "description": "読み取り専用権限（分析・比較用）",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "SSMReadOnlyAccess",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:GetCalendarState",
+          "ssm:DescribeParameters",
+          "ssm:GetParameters"
+        ],
+        "Resource": "*"
+      },
+      {
+        "Sid": "CloudWatchReadAccess",
+        "Effect": "Allow",
+        "Action": [
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics"
+        ],
+        "Resource": "*"
+      }
+    ]
+  },
+
+  "full_management_policy": {
+    "description": "Change Calendar完全管理権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "SSMChangeCalendarFullAccess",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:CreateDocument",
+          "ssm:UpdateDocument",
+          "ssm:DeleteDocument",
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:GetCalendarState",
+          "ssm:DescribeParameters",
+          "ssm:AddTagsToResource",
+          "ssm:RemoveTagsFromResource",
+          "ssm:ListTagsForResource"
+        ],
+        "Resource": [
+          "arn:aws:ssm:*:*:document/japanese-holidays-*",
+          "arn:aws:ssm:*:*:document/holiday-calendar-*"
+        ]
+      },
+      {
+        "Sid": "SSMParameterAccess",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:PutParameter",
+          "ssm:GetParameter",
+          "ssm:DeleteParameter"
+        ],
+        "Resource": [
+          "arn:aws:ssm:*:*:parameter/holiday-calendar/*"
+        ]
+      }
+    ]
+  },
+
+  "ci_cd_policy": {
+    "description": "CI/CDパイプライン用権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "SSMChangeCalendarCICD",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:CreateDocument",
+          "ssm:UpdateDocument",
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:GetCalendarState",
+          "ssm:AddTagsToResource"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringEquals": {
+            "ssm:DocumentCategories": ["ChangeCalendar"]
+          }
+        }
+      },
+      {
+        "Sid": "S3ArtifactAccess",
+        "Effect": "Allow",
+        "Action": [
+          "s3:PutObject",
+          "s3:GetObject",
+          "s3:DeleteObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::holiday-calendar-artifacts/*"
+        ]
+      },
+      {
+        "Sid": "CloudWatchLogging",
+        "Effect": "Allow",
+        "Action": [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        "Resource": [
+          "arn:aws:logs:*:*:log-group:/aws/lambda/holiday-calendar-*"
+        ]
+      }
+    ]
+  },
+
+  "cross_account_policy": {
+    "description": "クロスアカウントアクセス用権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AssumeRoleForChangeCalendar",
+        "Effect": "Allow",
+        "Action": [
+          "sts:AssumeRole"
+        ],
+        "Resource": [
+          "arn:aws:iam::*:role/HolidayCalendarCrossAccountRole"
+        ],
+        "Condition": {
+          "StringEquals": {
+            "sts:ExternalId": "holiday-calendar-external-id"
+          }
+        }
+      },
+      {
+        "Sid": "SSMChangeCalendarCrossAccount",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:GetCalendarState"
+        ],
+        "Resource": "*"
+      }
+    ]
+  },
+
+  "lambda_execution_policy": {
+    "description": "Lambda関数実行用権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "BasicLambdaExecution",
+        "Effect": "Allow",
+        "Action": [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ],
+        "Resource": "arn:aws:logs:*:*:*"
+      },
+      {
+        "Sid": "SSMChangeCalendarAccess",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:CreateDocument",
+          "ssm:UpdateDocument",
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:GetCalendarState"
+        ],
+        "Resource": "*"
+      },
+      {
+        "Sid": "S3ConfigAccess",
+        "Effect": "Allow",
+        "Action": [
+          "s3:GetObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::holiday-calendar-config/*"
+        ]
+      },
+      {
+        "Sid": "SNSNotification",
+        "Effect": "Allow",
+        "Action": [
+          "sns:Publish"
+        ],
+        "Resource": [
+          "arn:aws:sns:*:*:holiday-calendar-notifications"
+        ]
+      }
+    ]
+  },
+
+  "monitoring_policy": {
+    "description": "監視・メトリクス収集用権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "CloudWatchMetrics",
+        "Effect": "Allow",
+        "Action": [
+          "cloudwatch:PutMetricData",
+          "cloudwatch:GetMetricStatistics",
+          "cloudwatch:ListMetrics"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringEquals": {
+            "cloudwatch:namespace": "HolidayCalendar"
+          }
+        }
+      },
+      {
+        "Sid": "CloudWatchLogs",
+        "Effect": "Allow",
+        "Action": [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogGroups",
+          "logs:DescribeLogStreams"
+        ],
+        "Resource": [
+          "arn:aws:logs:*:*:log-group:/holiday-calendar/*"
+        ]
+      },
+      {
+        "Sid": "XRayTracing",
+        "Effect": "Allow",
+        "Action": [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ],
+        "Resource": "*"
+      }
+    ]
+  },
+
+  "security_restricted_policy": {
+    "description": "セキュリティ制限付き権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "SSMChangeCalendarRestricted",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:GetCalendarState"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringEquals": {
+            "aws:RequestedRegion": ["us-east-1", "ap-northeast-1"]
+          },
+          "DateGreaterThan": {
+            "aws:CurrentTime": "2024-01-01T00:00:00Z"
+          },
+          "DateLessThan": {
+            "aws:CurrentTime": "2025-12-31T23:59:59Z"
+          },
+          "IpAddress": {
+            "aws:SourceIp": ["203.0.113.0/24", "198.51.100.0/24"]
+          }
+        }
+      },
+      {
+        "Sid": "DenyDangerousActions",
+        "Effect": "Deny",
+        "Action": [
+          "ssm:DeleteDocument",
+          "ssm:UpdateDocument"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringLike": {
+            "ssm:DocumentName": "production-*"
+          }
+        }
+      }
+    ]
+  },
+
+  "resource_based_policy": {
+    "description": "リソースベースポリシー（Change Calendar用）",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "AllowSpecificAccountAccess",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": [
+            "arn:aws:iam::123456789012:root",
+            "arn:aws:iam::123456789012:role/HolidayCalendarRole"
+          ]
+        },
+        "Action": [
+          "ssm:GetDocument",
+          "ssm:GetCalendarState"
+        ],
+        "Resource": "*"
+      },
+      {
+        "Sid": "AllowCrossAccountRead",
+        "Effect": "Allow",
+        "Principal": {
+          "AWS": "*"
+        },
+        "Action": [
+          "ssm:GetDocument",
+          "ssm:GetCalendarState"
+        ],
+        "Resource": "*",
+        "Condition": {
+          "StringEquals": {
+            "aws:PrincipalOrgID": "o-1234567890"
+          }
+        }
+      }
+    ]
+  },
+
+  "terraform_policy": {
+    "description": "Terraform実行用権限",
+    "Version": "2012-10-17",
+    "Statement": [
+      {
+        "Sid": "TerraformSSMAccess",
+        "Effect": "Allow",
+        "Action": [
+          "ssm:CreateDocument",
+          "ssm:UpdateDocument",
+          "ssm:DeleteDocument",
+          "ssm:GetDocument",
+          "ssm:ListDocuments",
+          "ssm:DescribeDocumentParameters",
+          "ssm:AddTagsToResource",
+          "ssm:RemoveTagsFromResource",
+          "ssm:ListTagsForResource"
+        ],
+        "Resource": "*"
+      },
+      {
+        "Sid": "TerraformStateAccess",
+        "Effect": "Allow",
+        "Action": [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ],
+        "Resource": [
+          "arn:aws:s3:::terraform-state-holiday-calendar",
+          "arn:aws:s3:::terraform-state-holiday-calendar/*"
+        ]
+      },
+      {
+        "Sid": "TerraformLocking",
+        "Effect": "Allow",
+        "Action": [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem"
+        ],
+        "Resource": [
+          "arn:aws:dynamodb:*:*:table/terraform-lock-holiday-calendar"
+        ]
+      }
+    ]
+  }
+}
