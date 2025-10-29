@@ -1,0 +1,2 @@
+[console_scripts]
+aws-ssm-calendar = src.cli:cli
