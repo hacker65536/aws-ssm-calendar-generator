@@ -81,13 +81,13 @@ AWS SSM Change Calendar 休業日スケジュール管理ツールは、日本�
 **要件1 (日本祝日データ取得・管理)** → **Japanese Holidays Manager (src/japanese_holidays.py)**
 - 受入基準1: 内閣府公式CSV取得 → `fetch_official_data()`
 - 受入基準2: UTF-8変換 → `detect_encoding()`, `convert_to_utf8()`
-- 受入基準3: 当年以降フィルタ → `filter_current_year_onwards()`
+- 受入基準3: 当年以降フィルタ（内閣府CSVの最終年まで） → `filter_current_year_onwards()`
 - 受入基準4: キャッシュ管理 → `save_to_cache()`, `load_from_cache()`
 - 受入基準5: データインテグリティ → エラーハンドリング機構
 
 **要件2 (AWS SSM Change Calendar用ICS変換)** → **ICS Generator (src/ics_generator.py)**
 - 受入基準1: AWS SSM仕様準拠 → `create_aws_ssm_calendar()`
-- 受入基準2: 当年以降データ変換 → `convert_holidays_to_events()`
+- 受入基準2: 当年以降データ変換（内閣府CSVの最終年まで） → `convert_holidays_to_events()`
 - 受入基準3: UTF-8エンコーディング → `save_to_file()`
 - 受入基準4: 必須プロパティ → `generate_holiday_event()`
 - 受入基準5: AWS SSM互換性 → AWS専用ICS構造
@@ -129,7 +129,12 @@ AWS SSM Change Calendar 休業日スケジュール管理ツールは、日本�
 **Requirements-Driven Command Design**:
 
 **要件1対応コマンド**:
-- `holidays`: 祝日データ表示・管理 (要件1)
+- `holidays`: 祝日データ表示・管理 (要件1, 要件4.1)
+  - `--year`指定なし: 当年以降の全祝日データ（内閣府CSVの最終年まで）を表示
+    - 年別グループ化表示、統計情報表示
+    - ICS出力時は`convert_holidays_to_events()`使用
+  - `--year`指定あり: 指定年の祝日のみを表示（従来通り）
+    - `add_japanese_holidays_for_year(year)`使用
 - `check-holiday`: 特定日付の祝日確認 (要件1)
 - `refresh-holidays`: 祝日データ強制更新 (要件1)
 
@@ -288,7 +293,7 @@ class CLIMigrationHelper:
 
 **Core Requirements Implementation**:
 - **AWS SSM仕様準拠**: PRODID: -//AWS//Change Calendar 1.0//EN
-- **当年以降データ変換**: JapaneseHolidaysからの祝日データ変換
+- **当年以降データ変換**: JapaneseHolidaysからの祝日データ変換（内閣府CSVの最終年まで）
 - **文字エンコーディング**: UTF-8エンコーディング対応
 - **イベントプロパティ**: UID、DTSTAMP、SUMMARY、DTSTART、DTEND必須プロパティ
 - **AWS SSM互換性**: Change Calendarでの正常インポート保証
@@ -557,7 +562,7 @@ END:VEVENT
 **Core Requirements Implementation**:
 - **一次ソース取得**: 内閣府公式CSV（https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv）
 - **エンコーディング変換**: Shift_JIS/CP932 → UTF-8自動変換
-- **当年以降フィルタ**: 現在日時基準での祝日データ抽出
+- **当年以降フィルタ**: 現在日時基準での祝日データ抽出（内閣府CSVの最終年まで）
 - **キャッシュ管理**: 30日間有効期限付きローカルキャッシュ（`~/.aws-ssm-calendar/cache/japanese_holidays.csv`）
 - **データインテグリティ**: 公式データ取得失敗時の処理停止
 
@@ -577,7 +582,7 @@ class JapaneseHolidays:
         """UTF-8形式への変換"""
         
     def filter_current_year_onwards(self, holidays: List[Holiday]) -> List[Holiday]:
-        """当年以降の祝日データフィルタリング"""
+        """当年以降の祝日データフィルタリング（内閣府CSVの最終年まで）"""
         
     def save_to_cache(self, holidays: List[Holiday]) -> None:
         """UTF-8形式でのキャッシュ保存"""
@@ -607,7 +612,7 @@ UTF-8変換
  ↓
 現在日時取得
  ↓
-当年以降祝日データ抽出
+当年以降祝日データ抽出（内閣府CSVの最終年まで）
  ↓
 UTF-8形式でキャッシュ保存
  ↓
@@ -632,7 +637,7 @@ class DataIntegrityError(HolidayDataError):
 **Performance Requirements**:
 - 初回ダウンロード: 3秒以内
 - キャッシュ読み込み: 50ms以内  
-- メモリ使用量: 100KB以内（当年以降のみ保持）
+- メモリ使用量: 100KB以内（当年以降、内閣府CSVの最終年まで保持）
 
 **Design Decisions and Rationales**:
 
@@ -652,9 +657,9 @@ class DataIntegrityError(HolidayDataError):
    - **影響**: 文字化け防止、変換成功率向上
 
 4. **当年以降フィルタリング**:
-   - **決定**: システム実行時の現在年から将来の祝日のみ抽出
-   - **理由**: Change Calendarの運用目的（将来の変更制御）に特化
-   - **影響**: データサイズ削減、処理効率向上、運用目的との整合性
+   - **決定**: システム実行時の現在年から内閣府CSVに含まれる最終年までの祝日を抽出
+   - **理由**: Change Calendarの運用目的（将来の変更制御）に特化、利用可能な全期間のデータ活用
+   - **影響**: データサイズ最適化、処理効率向上、運用目的との整合性、将来計画の包括的サポート
 
 #### 4. AWS SSM Client (src/aws_client.py)
 

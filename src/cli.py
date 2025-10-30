@@ -2,7 +2,7 @@
 
 import click
 import os
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
 from contextlib import nullcontext
 
@@ -233,31 +233,70 @@ def status(ctx, calendar_name: str):
 
 
 @cli.command()
-@click.option('--year', '-y', type=int, help='Year to show holidays for (default: current year)')
+@click.option('--year', '-y', type=int, help='Year to show holidays for (default: current year onwards)')
 @click.option('--output', '-o', help='Output ICS file for holidays only')
 @click.pass_context
 def holidays(ctx, year: Optional[int], output: Optional[str]):
     """Show or export Japanese holidays."""
     try:
         jp_holidays = JapaneseHolidays()
-        target_year = year or datetime.now().year
         
-        holidays_list = jp_holidays.get_holidays_by_year(target_year)
-        
-        if not holidays_list:
-            click.echo(f"No holidays found for year {target_year}")
-            return
-        
-        click.echo(f"Japanese holidays for {target_year}:")
-        for holiday_date, holiday_name in holidays_list:
-            click.echo(f"  {holiday_date.strftime('%Y-%m-%d')} ({holiday_date.strftime('%a')}) - {holiday_name}")
-        
-        # Export to ICS if requested
-        if output:
-            ics_generator = ICSGenerator()
-            ics_generator.add_japanese_holidays_for_year(target_year)
-            ics_generator.save_to_file(output)
-            click.echo(f"Holidays exported to: {output}")
+        if year:
+            # 特定年が指定された場合はその年のみ
+            holidays_list = jp_holidays.get_holidays_by_year(year)
+            
+            if not holidays_list:
+                click.echo(f"No holidays found for year {year}")
+                return
+            
+            click.echo(f"Japanese holidays for {year}:")
+            for holiday_date, holiday_name in holidays_list:
+                click.echo(f"  {holiday_date.strftime('%Y-%m-%d')} ({holiday_date.strftime('%a')}) - {holiday_name}")
+            
+            # Export to ICS if requested
+            if output:
+                ics_generator = ICSGenerator()
+                ics_generator.add_japanese_holidays_for_year(year)
+                ics_generator.save_to_file(output)
+                click.echo(f"Holidays exported to: {output}")
+        else:
+            # 年指定がない場合は当年以降の全データ
+            current_year = datetime.now().year
+            stats = jp_holidays.get_stats()
+            
+            # 当年以降のデータを取得
+            start_date = date(current_year, 1, 1)
+            end_date = date(stats['max_year'], 12, 31)
+            holidays_list = jp_holidays.get_holidays_in_range(start_date, end_date)
+            
+            if not holidays_list:
+                click.echo(f"No holidays found from {current_year} onwards")
+                return
+            
+            click.echo(f"Japanese holidays from {current_year} onwards ({current_year}-{stats['max_year']}):")
+            
+            # 年別にグループ化して表示
+            holidays_by_year = {}
+            for holiday_date, holiday_name in holidays_list:
+                year_key = holiday_date.year
+                if year_key not in holidays_by_year:
+                    holidays_by_year[year_key] = []
+                holidays_by_year[year_key].append((holiday_date, holiday_name))
+            
+            for year_key in sorted(holidays_by_year.keys()):
+                click.echo(f"\n  {year_key}年:")
+                for holiday_date, holiday_name in holidays_by_year[year_key]:
+                    click.echo(f"    {holiday_date.strftime('%Y-%m-%d')} ({holiday_date.strftime('%a')}) - {holiday_name}")
+            
+            click.echo(f"\nTotal: {len(holidays_list)} holidays across {len(holidays_by_year)} years")
+            
+            # Export to ICS if requested
+            if output:
+                ics_generator = ICSGenerator()
+                # 当年以降の祝日を変換してICSに追加
+                ics_generator.convert_holidays_to_events()
+                ics_generator.save_to_file(output)
+                click.echo(f"Holidays exported to: {output}")
             
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

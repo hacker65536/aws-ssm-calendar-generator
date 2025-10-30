@@ -30,7 +30,7 @@ AWS Systems Manager Change Calendarに日本の祝日を含む休業日スケジ
 
 ### 1. 日本祝日データ管理
 - **📊 データソース**: 内閣府公式CSV（https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv）
-- **🎯 対象期間**: 当年以降の祝日データ（自動フィルタリング）
+- **🎯 対象期間**: 当年以降の祝日データ（内閣府CSVに含まれる最終年まで自動取得）
 - **💾 キャッシュシステム**: 30日間の有効期限付き自動キャッシュ
 - **🔒 データ整合性**: 公式データのみ使用、厳格な検証
 - **🌐 エンコーディング**: Shift_JIS/CP932からUTF-8への自動変換
@@ -265,7 +265,7 @@ python main.py --help
 # 祝日データの初期化
 python main.py refresh-holidays
 
-# 今年の祝日一覧表示（クリーンな出力）
+# 当年以降の祝日一覧表示（クリーンな出力）
 python main.py holidays
 
 # AWS接続テスト
@@ -386,7 +386,7 @@ aws configure
 # 5. 祝日データを初期化
 python main.py refresh-holidays
 
-# 6. 今年の祝日を確認
+# 6. 当年以降の祝日を確認
 python main.py holidays
 ```
 
@@ -394,13 +394,16 @@ python main.py holidays
 
 #### 📅 祝日データの管理
 ```bash
-# 今年の祝日一覧を表示
+# 当年以降の祝日一覧を表示（内閣府CSVに含まれる全データ）
 python main.py holidays
 
 # 特定年の祝日を表示
 python main.py holidays --year 2025
 
-# 祝日をICSファイルでエクスポート
+# 当年以降の祝日をICSファイルでエクスポート
+python main.py holidays --output holidays_current_onwards.ics
+
+# 特定年の祝日をICSファイルでエクスポート
 python main.py holidays --year 2024 --output holidays_2024.ics
 
 # 今日が祝日かチェック
@@ -450,7 +453,11 @@ python main.py compare-calendars cal1 cal2 cal3
 
 #### シナリオ1: 年次祝日カレンダーの作成
 ```bash
-# 2024年の祝日カレンダーを作成し、AWS Change Calendarに設定
+# 当年以降の祝日カレンダーを作成し、AWS Change Calendarに設定
+python main.py holidays --output holidays_current_onwards.ics
+python main.py create-calendar japanese-holidays-current --year 2025
+
+# 特定年の祝日カレンダーを作成
 python main.py holidays --year 2024 --output holidays_2024.ics
 python main.py create-calendar japanese-holidays-2024 --year 2024
 python main.py analyze-calendar japanese-holidays-2024
