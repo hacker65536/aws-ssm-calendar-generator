@@ -361,6 +361,87 @@ class ICSGenerator:
         except Exception as e:
             raise ICSGenerationError(f"祝日イベント生成失敗 ({holiday_date}): {e}")
     
+    def add_japanese_holidays_for_year(self, year: int) -> None:
+        """指定年の日本の祝日をカレンダーに追加.
+        
+        Args:
+            year: 対象年
+            
+        Raises:
+            ICSGenerationError: 祝日追加エラー
+        """
+        try:
+            # 指定年の祝日を取得
+            start_date = date(year, 1, 1)
+            end_date = date(year, 12, 31)
+            
+            holidays = self.japanese_holidays.get_holidays_in_range(start_date, end_date)
+            
+            # 日曜祝日フィルタリング適用
+            filtered_holidays, sunday_holidays = self.filter_sunday_holidays(holidays)
+            
+            # 各祝日をイベントに変換してカレンダーに追加
+            for holiday_date, holiday_name in filtered_holidays:
+                event = self.generate_holiday_event(holiday_date, holiday_name)
+                self.calendar.add_component(event)
+            
+            self.logger.info(f"{year}年の祝日追加完了: {len(filtered_holidays)} 件")
+            
+            if self.exclude_sunday_holidays and sunday_holidays:
+                self.logger.info(f"日曜祝日除外: {len(sunday_holidays)} 件")
+            
+        except Exception as e:
+            raise ICSGenerationError(f"{year}年の祝日追加失敗: {e}")
+    
+    def add_japanese_holidays(self, start_date: date, end_date: date) -> None:
+        """指定期間の日本の祝日をカレンダーに追加.
+        
+        Args:
+            start_date: 開始日
+            end_date: 終了日
+            
+        Raises:
+            ICSGenerationError: 祝日追加エラー
+        """
+        try:
+            holidays = self.japanese_holidays.get_holidays_in_range(start_date, end_date)
+            
+            # 日曜祝日フィルタリング適用
+            filtered_holidays, sunday_holidays = self.filter_sunday_holidays(holidays)
+            
+            # 各祝日をイベントに変換してカレンダーに追加
+            for holiday_date, holiday_name in filtered_holidays:
+                event = self.generate_holiday_event(holiday_date, holiday_name)
+                self.calendar.add_component(event)
+            
+            self.logger.info(f"期間 {start_date} - {end_date} の祝日追加完了: {len(filtered_holidays)} 件")
+            
+            if self.exclude_sunday_holidays and sunday_holidays:
+                self.logger.info(f"日曜祝日除外: {len(sunday_holidays)} 件")
+            
+        except Exception as e:
+            raise ICSGenerationError(f"期間 {start_date} - {end_date} の祝日追加失敗: {e}")
+
+    def clear_events(self) -> None:
+        """カレンダーからすべてのイベントをクリア."""
+        try:
+            # VEVENTコンポーネントのみを削除
+            components_to_remove = []
+            for component in self.calendar.subcomponents:
+                if component.name == 'VEVENT':
+                    components_to_remove.append(component)
+            
+            for component in components_to_remove:
+                self.calendar.subcomponents.remove(component)
+            
+            # 変換済みフラグをリセット
+            self._events_converted = False
+            
+            self.logger.info("イベントクリア完了")
+            
+        except Exception as e:
+            raise ICSGenerationError(f"イベントクリア失敗: {e}")
+
     def convert_holidays_to_events(self) -> None:
         """祝日データをICSイベントに変換.
         
