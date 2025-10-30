@@ -130,10 +130,13 @@ AWS SSM Change Calendar 休業日スケジュール管理ツールは、日本�
 
 **要件1対応コマンド**:
 - `holidays`: 祝日データ表示・管理 (要件1, 要件4.1)
-  - `--year`指定なし: 当年以降の全祝日データ（内閣府CSVの最終年まで）を表示
+  - `--year`指定なし: 当年以降の全祝日データ（内閣府CSVの最終年まで、日曜祝日除外）を表示
     - 年別グループ化表示、統計情報表示
     - ICS出力時は`convert_holidays_to_events()`使用
-  - `--year`指定あり: 指定年の祝日のみを表示（従来通り）
+    - 表示とICS出力で一貫した日曜祝日フィルタリング
+  - `--year`指定あり: 指定年の祝日のみを表示（従来通り、日曜祝日除外）
+    - `filter_sunday_holidays()`適用後の表示
+    - 除外された日曜祝日の明示的表示
     - `add_japanese_holidays_for_year(year)`使用
 - `check-holiday`: 特定日付の祝日確認 (要件1)
 - `refresh-holidays`: 祝日データ強制更新 (要件1)

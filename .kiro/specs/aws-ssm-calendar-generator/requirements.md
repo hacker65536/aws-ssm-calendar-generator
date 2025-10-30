@@ -302,22 +302,22 @@ Japanese holidays for 2025:
 
 **コマンド動作例:**
 ```bash
-# 当年以降の全祝日を表示（新しいデフォルト動作）
+# 当年以降の全祝日を表示（新しいデフォルト動作、日曜祝日除外）
 python main.py holidays
-# 出力: 2025年-2026年の全祝日（内閣府CSVに含まれる範囲）
+# 出力: 2025年-2026年の祝日（日曜祝日除外、33件）
 
-# 特定年の祝日を表示（従来通り）
+# 特定年の祝日を表示（従来通り、日曜祝日除外）
 python main.py holidays --year 2025
-# 出力: 2025年の祝日のみ
+# 出力: 2025年の祝日のみ（日曜祝日除外、16件）
 
-# 当年以降の全祝日をICSファイルに出力
+# 当年以降の全祝日をICSファイルに出力（日曜祝日除外）
 python main.py holidays --output holidays_current_onwards.ics
-# 出力: 2025年-2026年の祝日を含むICSファイル
+# 出力: 2025年-2026年の祝日を含むICSファイル（33件のイベント）
 ```
 
 **出力形式例:**
 ```
-Japanese holidays from 2025 onwards (2025-2026):
+Japanese holidays from 2025 onwards (2025-2026) - excluding Sunday holidays:
 
   2025年:
     2025-01-01 (Wed) - 元日
@@ -329,14 +329,26 @@ Japanese holidays from 2025 onwards (2025-2026):
     2026-01-12 (Mon) - 成人の日
     ...
 
-Total: 37 holidays across 2 years
+Total: 33 holidays across 2 years
+
+# 特定年指定時の出力例（除外された日曜祝日も表示）
+Japanese holidays for 2025 - excluding Sunday holidays:
+  2025-01-01 (Wed) - 元日
+  ...
+
+Excluded Sunday holidays: 3 events
+  2025-02-23 (Sun) - 天皇誕生日 [excluded]
+  2025-05-04 (Sun) - みどりの日 [excluded]
+  2025-11-23 (Sun) - 勤労感謝の日 [excluded]
 ```
 
 **実装要件:**
 - 内閣府CSVの年度範囲自動検出（`get_stats()`メソッド活用）
 - 年別データグループ化とソート表示
+- **日曜祝日フィルタリング**: 表示とICS出力の両方で一貫した日曜祝日除外処理
 - ICS出力時の`convert_holidays_to_events()`メソッド使用
 - 従来の`--year`指定動作の完全な後方互換性維持
+- 除外された日曜祝日の明示的表示（特定年指定時）
 
 ### 要件5 - ICSファイル比較・差分表示
 

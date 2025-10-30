@@ -242,42 +242,51 @@ def holidays(ctx, year: Optional[int], output: Optional[str]):
         jp_holidays = JapaneseHolidays()
         
         if year:
-            # 特定年が指定された場合はその年のみ
-            holidays_list = jp_holidays.get_holidays_by_year(year)
+            # 特定年が指定された場合はその年のみ（日曜祝日フィルタリング適用）
+            ics_generator = ICSGenerator()
+            start_date = date(year, 1, 1)
+            end_date = date(year, 12, 31)
+            all_holidays = jp_holidays.get_holidays_in_range(start_date, end_date)
             
-            if not holidays_list:
+            # 日曜祝日フィルタリングを適用
+            filtered_holidays, sunday_holidays = ics_generator.filter_sunday_holidays(all_holidays)
+            
+            if not filtered_holidays:
                 click.echo(f"No holidays found for year {year}")
                 return
             
-            click.echo(f"Japanese holidays for {year}:")
-            for holiday_date, holiday_name in holidays_list:
+            click.echo(f"Japanese holidays for {year} - excluding Sunday holidays:")
+            for holiday_date, holiday_name in filtered_holidays:
                 click.echo(f"  {holiday_date.strftime('%Y-%m-%d')} ({holiday_date.strftime('%a')}) - {holiday_name}")
+            
+            if sunday_holidays:
+                click.echo(f"\nExcluded Sunday holidays: {len(sunday_holidays)} events")
+                for holiday_date, holiday_name in sunday_holidays:
+                    click.echo(f"  {holiday_date.strftime('%Y-%m-%d')} (Sun) - {holiday_name} [excluded]")
             
             # Export to ICS if requested
             if output:
-                ics_generator = ICSGenerator()
                 ics_generator.add_japanese_holidays_for_year(year)
                 ics_generator.save_to_file(output)
                 click.echo(f"Holidays exported to: {output}")
         else:
-            # 年指定がない場合は当年以降の全データ
+            # 年指定がない場合は当年以降の全データ（日曜祝日フィルタリング適用）
             current_year = datetime.now().year
             stats = jp_holidays.get_stats()
             
-            # 当年以降のデータを取得
-            start_date = date(current_year, 1, 1)
-            end_date = date(stats['max_year'], 12, 31)
-            holidays_list = jp_holidays.get_holidays_in_range(start_date, end_date)
+            # ICSGeneratorを使用して日曜祝日フィルタリングを適用
+            ics_generator = ICSGenerator()
+            filtered_holidays = ics_generator.convert_current_year_onwards_holidays()
             
-            if not holidays_list:
+            if not filtered_holidays:
                 click.echo(f"No holidays found from {current_year} onwards")
                 return
             
-            click.echo(f"Japanese holidays from {current_year} onwards ({current_year}-{stats['max_year']}):")
+            click.echo(f"Japanese holidays from {current_year} onwards ({current_year}-{stats['max_year']}) - excluding Sunday holidays:")
             
             # 年別にグループ化して表示
             holidays_by_year = {}
-            for holiday_date, holiday_name in holidays_list:
+            for holiday_date, holiday_name in filtered_holidays:
                 year_key = holiday_date.year
                 if year_key not in holidays_by_year:
                     holidays_by_year[year_key] = []
@@ -288,12 +297,11 @@ def holidays(ctx, year: Optional[int], output: Optional[str]):
                 for holiday_date, holiday_name in holidays_by_year[year_key]:
                     click.echo(f"    {holiday_date.strftime('%Y-%m-%d')} ({holiday_date.strftime('%a')}) - {holiday_name}")
             
-            click.echo(f"\nTotal: {len(holidays_list)} holidays across {len(holidays_by_year)} years")
+            click.echo(f"\nTotal: {len(filtered_holidays)} holidays across {len(holidays_by_year)} years")
             
             # Export to ICS if requested
             if output:
-                ics_generator = ICSGenerator()
-                # 当年以降の祝日を変換してICSに追加
+                # 既にフィルタリング済みのデータを使用してICS生成
                 ics_generator.convert_holidays_to_events()
                 ics_generator.save_to_file(output)
                 click.echo(f"Holidays exported to: {output}")
