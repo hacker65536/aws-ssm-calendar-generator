@@ -154,10 +154,7 @@ class ICSGenerator:
             EncodingError: エンコーディングエラー
         """
         try:
-            # 祝日イベントを変換
-            self.convert_holidays_to_events()
-            
-            # ICS形式に変換
+            # ICS形式に変換（祝日は明示的に追加されたもののみ）
             ics_bytes = self.calendar.to_ical()
             
             # UTF-8デコード
@@ -361,6 +358,14 @@ class ICSGenerator:
         except Exception as e:
             raise ICSGenerationError(f"祝日イベント生成失敗 ({holiday_date}): {e}")
     
+    def _get_existing_event_uids(self) -> set:
+        """既存のイベントのUIDセットを取得."""
+        existing_uids = set()
+        for component in self.calendar.subcomponents:
+            if component.name == 'VEVENT' and 'uid' in component:
+                existing_uids.add(str(component['uid']))
+        return existing_uids
+
     def add_japanese_holidays_for_year(self, year: int) -> None:
         """指定年の日本の祝日をカレンダーに追加.
         
@@ -371,6 +376,9 @@ class ICSGenerator:
             ICSGenerationError: 祝日追加エラー
         """
         try:
+            # 既存のイベントUIDを取得
+            existing_uids = self._get_existing_event_uids()
+            
             # 指定年の祝日を取得
             start_date = date(year, 1, 1)
             end_date = date(year, 12, 31)
@@ -380,12 +388,24 @@ class ICSGenerator:
             # 日曜祝日フィルタリング適用
             filtered_holidays, sunday_holidays = self.filter_sunday_holidays(holidays)
             
-            # 各祝日をイベントに変換してカレンダーに追加
-            for holiday_date, holiday_name in filtered_holidays:
-                event = self.generate_holiday_event(holiday_date, holiday_name)
-                self.calendar.add_component(event)
+            # 各祝日をイベントに変換してカレンダーに追加（重複チェック付き）
+            added_count = 0
+            skipped_count = 0
             
-            self.logger.info(f"{year}年の祝日追加完了: {len(filtered_holidays)} 件")
+            for holiday_date, holiday_name in filtered_holidays:
+                # UIDを生成して重複チェック
+                uid = f"jp-holiday-{holiday_date.strftime('%Y%m%d')}@aws-ssm-change-calendar"
+                
+                if uid not in existing_uids:
+                    event = self.generate_holiday_event(holiday_date, holiday_name)
+                    self.calendar.add_component(event)
+                    existing_uids.add(uid)
+                    added_count += 1
+                else:
+                    skipped_count += 1
+                    self.logger.debug(f"重複スキップ: {holiday_date} - {holiday_name}")
+            
+            self.logger.info(f"{year}年の祝日追加完了: {added_count} 件追加, {skipped_count} 件スキップ")
             
             if self.exclude_sunday_holidays and sunday_holidays:
                 self.logger.info(f"日曜祝日除外: {len(sunday_holidays)} 件")
@@ -404,17 +424,32 @@ class ICSGenerator:
             ICSGenerationError: 祝日追加エラー
         """
         try:
+            # 既存のイベントUIDを取得
+            existing_uids = self._get_existing_event_uids()
+            
             holidays = self.japanese_holidays.get_holidays_in_range(start_date, end_date)
             
             # 日曜祝日フィルタリング適用
             filtered_holidays, sunday_holidays = self.filter_sunday_holidays(holidays)
             
-            # 各祝日をイベントに変換してカレンダーに追加
-            for holiday_date, holiday_name in filtered_holidays:
-                event = self.generate_holiday_event(holiday_date, holiday_name)
-                self.calendar.add_component(event)
+            # 各祝日をイベントに変換してカレンダーに追加（重複チェック付き）
+            added_count = 0
+            skipped_count = 0
             
-            self.logger.info(f"期間 {start_date} - {end_date} の祝日追加完了: {len(filtered_holidays)} 件")
+            for holiday_date, holiday_name in filtered_holidays:
+                # UIDを生成して重複チェック
+                uid = f"jp-holiday-{holiday_date.strftime('%Y%m%d')}@aws-ssm-change-calendar"
+                
+                if uid not in existing_uids:
+                    event = self.generate_holiday_event(holiday_date, holiday_name)
+                    self.calendar.add_component(event)
+                    existing_uids.add(uid)
+                    added_count += 1
+                else:
+                    skipped_count += 1
+                    self.logger.debug(f"重複スキップ: {holiday_date} - {holiday_name}")
+            
+            self.logger.info(f"期間 {start_date} - {end_date} の祝日追加完了: {added_count} 件追加, {skipped_count} 件スキップ")
             
             if self.exclude_sunday_holidays and sunday_holidays:
                 self.logger.info(f"日曜祝日除外: {len(sunday_holidays)} 件")
