@@ -2,9 +2,10 @@
 
 import click
 import os
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional
 from contextlib import nullcontext
+from pathlib import Path
 
 from .aws_client import SSMChangeCalendarClient
 from .ics_generator import ICSGenerator
@@ -13,6 +14,7 @@ from .config import Config
 from .japanese_holidays import JapaneseHolidays
 from .change_calendar_manager import ChangeCalendarManager
 from .calendar_analyzer import ICSAnalyzer
+from .event_parser import EventListParser, ICSExtender
 from .error_handler import (
     BaseApplicationError, handle_error, ErrorCategory, ErrorSeverity,
     AWSError, ConfigurationError, FileSystemError, ValidationError
@@ -1032,6 +1034,134 @@ def semantic_diff(ctx, file1: str, file2: str, color: bool, output: Optional[str
         except Exception as e:
             error_msg = f"Failed to generate semantic diff: {e}"
             click.echo(f"Error: {error_msg}", err=True)
+            raise click.Abort()
+
+
+@cli.command()
+@click.option('--input', '-i', required=True, help='既存ICSファイルパス')
+@click.option('--events', '-e', required=True, help='イベントリストファイルパス（カンマ区切りで複数指定可能）')
+@click.option('--output', '-o', help='出力ICSファイルパス（省略時は入力ファイル名_extended.ics）')
+@click.option('--overwrite', is_flag=True, help='入力ファイルを直接上書き')
+@click.option('--dry-run', is_flag=True, help='実際の変更を行わず、追加予定のイベントのみ表示')
+@click.option('--skip-duplicates/--include-duplicates', default=True, help='重複イベントをスキップ（デフォルト: True）')
+@click.pass_context
+@log_performance("add_events")
+@log_function_call(log_args=True)
+def add_events(ctx, input, events, output, overwrite, dry_run, skip_duplicates):
+    """既存ICSファイルにカスタムイベントを追加
+    
+    要件5: 簡易イベントリストからのICS拡張機能
+    
+    Examples:
+      python main.py add-events -i holidays.ics -e events.txt -o extended.ics
+      python main.py add-events -i holidays.ics -e events1.txt,events2.txt --overwrite
+      python main.py add-events -i holidays.ics -e maintenance.txt --dry-run
+    """
+    logging_manager = ctx.obj.get('logging_manager')
+    
+    with logging_manager.monitor_operation("add_events", {
+        "input_file": input,
+        "events_files": events,
+        "dry_run": dry_run
+    }) if logging_manager else nullcontext():
+        try:
+            # 入力検証
+            if overwrite and output:
+                raise ValidationError("--overwrite と --output は同時に指定できません")
+            
+            # イベントファイルリスト
+            event_files = [f.strip() for f in events.split(',')]
+            
+            # 出力パス決定
+            if overwrite:
+                output_path = input
+            elif output:
+                output_path = output
+            else:
+                # デフォルト: 入力ファイル名_extended.ics
+                input_path = Path(input)
+                output_path = str(input_path.parent / f"{input_path.stem}_extended{input_path.suffix}")
+            
+            click.echo(f"📁 入力ICSファイル: {input}")
+            click.echo(f"📝 イベントファイル: {', '.join(event_files)}")
+            if not dry_run:
+                click.echo(f"📁 出力ファイル: {output_path}")
+            
+            # イベント解析
+            parser = EventListParser()
+            all_events = []
+            
+            for event_file in event_files:
+                try:
+                    file_events = parser.parse_event_file(event_file)
+                    all_events.extend(file_events)
+                    click.echo(f"✅ {event_file}: {len(file_events)} イベントを解析")
+                except Exception as e:
+                    click.echo(f"❌ {event_file}: 解析エラー - {e}", err=True)
+                    raise click.Abort()
+            
+            if not all_events:
+                click.echo("⚠️  追加するイベントがありません")
+                return
+            
+            # データ検証
+            validation_errors = parser.validate_event_data(all_events)
+            if validation_errors:
+                click.echo("❌ イベントデータ検証エラー:", err=True)
+                for error in validation_errors:
+                    click.echo(f"  {error}", err=True)
+                raise click.Abort()
+            
+            if dry_run:
+                # ドライラン: 追加予定イベントを表示
+                click.echo(f"\n📋 追加予定のイベント ({len(all_events)} 件):")
+                for i, event in enumerate(all_events, 1):
+                    start_str = event['start_datetime'].strftime('%Y-%m-%d %H:%M:%S')
+                    if event['is_all_day']:
+                        if event['end_datetime']:
+                            end_date = event['end_datetime'].date() - timedelta(days=1)
+                            end_str = end_date.strftime('%Y-%m-%d')
+                            duration = f"{start_str[:10]} - {end_str} (終日)"
+                        else:
+                            duration = f"{start_str[:10]} (終日)"
+                    else:
+                        end_str = event['end_datetime'].strftime('%Y-%m-%d %H:%M:%S')
+                        duration = f"{start_str} - {end_str}"
+                    
+                    click.echo(f"  {i}. {event['name']} | {duration}")
+                
+                click.echo(f"\n💡 実際に追加するには --dry-run を外して実行してください")
+            else:
+                # 実際の追加処理
+                extender = ICSExtender(input)
+                added_count = extender.add_custom_events(all_events, skip_duplicates=skip_duplicates)
+                extender.save_extended_ics(output_path)
+                
+                click.echo(f"✅ {added_count} 件のイベントを追加しました")
+                click.echo(f"📁 出力ファイル: {output_path}")
+                
+                # 統計情報表示
+                if skip_duplicates:
+                    skipped_count = len(all_events) - added_count
+                    if skipped_count > 0:
+                        click.echo(f"ℹ️  重複により {skipped_count} 件のイベントをスキップしました")
+        
+        except ValidationError as e:
+            handle_error(e, {"operation": "add_events", "input_file": input})
+            click.echo(f"❌ 入力検証エラー: {e.get_user_message()}", err=True)
+            raise click.Abort()
+        except BaseApplicationError as e:
+            handle_error(e, {"operation": "add_events", "input_file": input})
+            click.echo(f"❌ エラー: {e.get_user_message()}", err=True)
+            raise click.Abort()
+        except Exception as e:
+            error = FileSystemError(
+                f"イベント追加処理に失敗: {e}",
+                operation="add_events",
+                file_path=input
+            )
+            handle_error(error, {"input_file": input, "events_files": events})
+            click.echo(f"❌ エラー: {error.get_user_message()}", err=True)
             raise click.Abort()
 
 
