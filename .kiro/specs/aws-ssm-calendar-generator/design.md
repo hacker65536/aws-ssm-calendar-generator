@@ -1344,4 +1344,342 @@ python -m src.cli aws-status --calendar japanese-holidays-2025 --region us-east-
 - **Connection Pooling**: boto3セッション再利用
 - **Caching**: Change Calendar内容の一時キャッシュ
 - **Parallel Processing**: 複数カレンダー比較の並列処理
+- **Rate Limiting**: AWS API制限への対応pyth
+on -m src.cli aws-status --calendar japanese-holidays-2025 --region us-east-1
+```
+
+**Performance Optimization**:
+- **Connection Pooling**: boto3セッション再利用
+- **Caching**: Change Calendar内容の一時キャッシュ
+- **Parallel Processing**: 複数カレンダー比較の並列処理
 - **Rate Limiting**: AWS API制限への対応
+
+## 5. Event List Parser and ICS Extender (src/event_parser.py)
+
+**Purpose**: 要件5の実装 - 簡易イベントリストからのICS拡張機能
+
+**Core Requirements Implementation**:
+- **簡易イベントファイル解析**: タブ区切り・スペース区切りテキストファイルの解析
+- **柔軟な日時形式対応**: ISO8601形式および日付のみ形式のサポート
+- **終日イベント自動判定**: 終了時間省略時の終日イベント処理
+- **既存ICS拡張**: 既存ICSファイルへの新規イベント追加
+- **重複回避**: 同一イベントの重複検出・回避
+- **エラーハンドリング**: 包括的なエラー処理とユーザーフレンドリーなメッセージ
+
+**Key Methods**:
+```python
+class EventListParser:
+    def __init__(self):
+        """イベントリストパーサー初期化"""
+        
+    def parse_event_file(self, filepath: str) -> List[Dict]:
+        """イベントファイル解析"""
+        
+    def detect_delimiter(self, content: str) -> str:
+        """区切り文字自動検出（タブ優先、スペース代替）"""
+        
+    def parse_datetime(self, datetime_str: str) -> Tuple[datetime, bool]:
+        """日時解析（終日イベント判定含む）"""
+        
+    def validate_event_data(self, events: List[Dict]) -> List[str]:
+        """イベントデータ検証"""
+
+class ICSExtender:
+    def __init__(self, base_ics_path: str):
+        """ICS拡張器初期化"""
+        
+    def load_existing_ics(self) -> Calendar:
+        """既存ICSファイル読み込み"""
+        
+    def add_custom_events(self, events: List[Dict]) -> int:
+        """カスタムイベント追加"""
+        
+    def detect_duplicates(self, new_event: Dict) -> bool:
+        """重複イベント検出"""
+        
+    def generate_custom_event(self, event_data: Dict) -> Event:
+        """カスタムイベント生成"""
+        
+    def save_extended_ics(self, output_path: str) -> None:
+        """拡張ICSファイル保存"""
+```
+
+**Event File Format Support**:
+```python
+# サポートする形式
+SUPPORTED_FORMATS = {
+    'tab_delimited': {
+        'delimiter': '\t',
+        'priority': 1,
+        'example': 'イベント名\t開始日時\t終了日時'
+    },
+    'space_delimited': {
+        'delimiter': ' ',
+        'priority': 2,
+        'example': 'イベント名 開始日時 終了日時'
+    },
+    'comma_delimited': {
+        'delimiter': ',',
+        'priority': 3,
+        'example': 'イベント名,開始日時,終了日時'
+    }
+}
+
+# 日時形式パターン
+DATETIME_PATTERNS = [
+    r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$',  # 2025-10-23T18:00:00
+    r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$',  # 2025-10-23 18:00:00
+    r'^\d{4}-\d{2}-\d{2}$',                     # 2025-10-23 (終日)
+    r'^\d{4}/\d{2}/\d{2}T\d{2}:\d{2}:\d{2}$',  # 2025/10/23T18:00:00
+    r'^\d{4}/\d{2}/\d{2}$'                      # 2025/10/23 (終日)
+]
+```
+
+**Event Parsing Algorithm**:
+```python
+def parse_event_file(self, filepath: str) -> List[Dict]:
+    """
+    イベントファイル解析アルゴリズム
+    
+    1. ファイル読み込み（UTF-8、エラー時はShift_JIS試行）
+    2. 区切り文字自動検出（タブ > スペース > カンマ）
+    3. ヘッダー行検出・スキップ
+    4. 各行の解析：
+       - 区切り文字で分割
+       - 日時形式検証・変換
+       - 終日イベント判定
+       - データ検証
+    5. 重複チェック
+    6. エラー収集・報告
+    """
+    
+    events = []
+    errors = []
+    
+    try:
+        # ファイル読み込み
+        content = self._read_file_with_encoding(filepath)
+        
+        # 区切り文字検出
+        delimiter = self.detect_delimiter(content)
+        
+        lines = content.strip().split('\n')
+        header_skipped = False
+        
+        for line_num, line in enumerate(lines, 1):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+                
+            # ヘッダー行スキップ
+            if not header_skipped and self._is_header_line(line):
+                header_skipped = True
+                continue
+            
+            try:
+                event = self._parse_event_line(line, delimiter, line_num)
+                if event:
+                    events.append(event)
+            except Exception as e:
+                errors.append(f"行 {line_num}: {e}")
+        
+        if errors:
+            raise EventParsingError(f"解析エラー:\n" + "\n".join(errors))
+        
+        return events
+        
+    except Exception as e:
+        raise EventParsingError(f"ファイル解析失敗: {e}")
+```
+
+**Custom Event Generation**:
+```python
+def generate_custom_event(self, event_data: Dict) -> Event:
+    """
+    カスタムイベント生成
+    
+    Args:
+        event_data: {
+            'name': str,
+            'start_datetime': datetime,
+            'end_datetime': datetime,
+            'is_all_day': bool
+        }
+    """
+    event = Event()
+    
+    # 基本プロパティ
+    event.add('summary', f"カスタムイベント: {event_data['name']}")
+    event.add('description', f"カスタムイベント: {event_data['name']}")
+    event.add('categories', 'Custom-Event')
+    
+    # 日時設定
+    if event_data['is_all_day']:
+        # 終日イベント
+        event.add('dtstart', event_data['start_datetime'].date())
+        if event_data['end_datetime']:
+            event.add('dtend', event_data['end_datetime'].date())
+        else:
+            # 終了日時がない場合は翌日
+            next_day = event_data['start_datetime'].date() + timedelta(days=1)
+            event.add('dtend', next_day)
+    else:
+        # 時刻指定イベント
+        start_dt = self.tokyo_tz.localize(event_data['start_datetime'])
+        end_dt = self.tokyo_tz.localize(event_data['end_datetime'])
+        
+        event.add('dtstart', start_dt)
+        event.add('dtend', end_dt)
+        event['dtstart'].params['TZID'] = 'Asia/Tokyo'
+        event['dtend'].params['TZID'] = 'Asia/Tokyo'
+    
+    # UID生成
+    uid_source = f"{event_data['name']}-{event_data['start_datetime'].isoformat()}"
+    uid_hash = hashlib.md5(uid_source.encode('utf-8')).hexdigest()[:8]
+    event.add('uid', f"custom-event-{uid_hash}@aws-ssm-change-calendar")
+    
+    # タイムスタンプ
+    event.add('dtstamp', datetime.now(timezone.utc))
+    
+    return event
+```
+
+**Duplicate Detection Strategy**:
+```python
+def detect_duplicates(self, new_event: Dict) -> bool:
+    """
+    重複イベント検出
+    
+    重複判定基準:
+    1. 同一開始日時
+    2. 同一イベント名（大文字小文字無視）
+    3. 同一期間（終日イベントの場合）
+    """
+    
+    for existing_event in self.existing_events:
+        # 開始日時比較
+        existing_start = existing_event.get('dtstart')
+        if not existing_start:
+            continue
+            
+        # 日時正規化
+        new_start = new_event['start_datetime']
+        if hasattr(existing_start.dt, 'date'):
+            existing_start_dt = existing_start.dt
+        else:
+            existing_start_dt = datetime.combine(existing_start.dt, datetime.min.time())
+        
+        # 開始日時が一致
+        if new_start.date() == existing_start_dt.date():
+            # イベント名比較（正規化）
+            existing_summary = str(existing_event.get('summary', '')).lower().strip()
+            new_summary = new_event['name'].lower().strip()
+            
+            if existing_summary == new_summary or new_summary in existing_summary:
+                return True
+    
+    return False
+```
+
+**CLI Integration Design**:
+```python
+@cli.command()
+@click.option('--input', '-i', required=True, help='既存ICSファイルパス')
+@click.option('--events', '-e', required=True, help='イベントリストファイルパス（カンマ区切りで複数指定可能）')
+@click.option('--output', '-o', help='出力ICSファイルパス（省略時は入力ファイルを上書き）')
+@click.option('--overwrite', is_flag=True, help='入力ファイルを直接上書き')
+@click.option('--dry-run', is_flag=True, help='実際の変更を行わず、追加予定のイベントのみ表示')
+@click.option('--skip-duplicates', is_flag=True, default=True, help='重複イベントをスキップ（デフォルト: True）')
+@click.pass_context
+def add_events(ctx, input, events, output, overwrite, dry_run, skip_duplicates):
+    """既存ICSファイルにカスタムイベントを追加"""
+    
+    try:
+        # 入力検証
+        input_path = validate_file_path_input(input, must_exist=True)
+        event_files = [f.strip() for f in events.split(',')]
+        
+        # 出力パス決定
+        if overwrite and output:
+            raise ValidationError("--overwrite と --output は同時に指定できません")
+        
+        output_path = input_path if overwrite else (output or f"{input_path.stem}_extended{input_path.suffix}")
+        
+        # イベント解析
+        parser = EventListParser()
+        all_events = []
+        
+        for event_file in event_files:
+            event_file_path = validate_file_path_input(event_file, must_exist=True)
+            file_events = parser.parse_event_file(str(event_file_path))
+            all_events.extend(file_events)
+            click.echo(f"✅ {event_file}: {len(file_events)} イベントを解析")
+        
+        # ICS拡張
+        extender = ICSExtender(str(input_path))
+        
+        if dry_run:
+            # ドライラン: 追加予定イベントを表示
+            click.echo(f"\n📋 追加予定のイベント ({len(all_events)} 件):")
+            for i, event in enumerate(all_events, 1):
+                start_str = event['start_datetime'].strftime('%Y-%m-%d %H:%M:%S')
+                end_str = event['end_datetime'].strftime('%Y-%m-%d %H:%M:%S') if event['end_datetime'] else '終日'
+                all_day = ' (終日)' if event['is_all_day'] else ''
+                click.echo(f"  {i}. {event['name']} | {start_str} - {end_str}{all_day}")
+        else:
+            # 実際の追加処理
+            added_count = extender.add_custom_events(all_events, skip_duplicates=skip_duplicates)
+            extender.save_extended_ics(str(output_path))
+            
+            click.echo(f"✅ {added_count} 件のイベントを追加しました")
+            click.echo(f"📁 出力ファイル: {output_path}")
+        
+    except Exception as e:
+        click.echo(f"❌ エラー: {e}", err=True)
+        raise click.Abort()
+```
+
+**Error Handling Framework**:
+```python
+class EventParsingError(BaseApplicationError):
+    """イベント解析エラー"""
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message,
+            category=ErrorCategory.DATA,
+            severity=ErrorSeverity.MEDIUM,
+            **kwargs
+        )
+
+class ICSExtensionError(BaseApplicationError):
+    """ICS拡張エラー"""
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message,
+            category=ErrorCategory.FILE_SYSTEM,
+            severity=ErrorSeverity.MEDIUM,
+            **kwargs
+        )
+
+class DuplicateEventError(BaseApplicationError):
+    """重複イベントエラー"""
+    def __init__(self, message: str, **kwargs):
+        super().__init__(
+            message,
+            category=ErrorCategory.DATA,
+            severity=ErrorSeverity.LOW,
+            **kwargs
+        )
+```
+
+**Performance Optimization**:
+- **Streaming Parser**: 大容量ファイルの行単位処理
+- **Memory Efficient**: イベントデータの最小限保持
+- **Batch Processing**: 複数イベントの一括処理
+- **Validation Caching**: 日時パターンの事前コンパイル
+
+**Security Considerations**:
+- **Path Validation**: パストラバーサル攻撃防止
+- **Input Sanitization**: イベント名・説明のサニタイゼーション
+- **File Permissions**: 生成ファイルの適切な権限設定
+- **Resource Limits**: メモリ使用量制限とタイムアウト設定

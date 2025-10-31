@@ -449,6 +449,21 @@ python main.py analyze-calendar japanese-holidays-2024
 python main.py compare-calendars cal1 cal2 cal3
 ```
 
+#### 📝 カスタムイベントの追加
+```bash
+# 既存ICSファイルにカスタムイベントを追加
+python main.py add-events --input holidays.ics --events custom_events.txt --output extended_calendar.ics
+
+# 複数のイベントファイルを統合
+python main.py add-events --input holidays.ics --events events1.txt,events2.txt --output combined.ics
+
+# 既存ファイルを直接更新
+python main.py add-events --input holidays.ics --events maintenance.txt --overwrite
+
+# 追加予定のイベントを事前確認（ドライラン）
+python main.py add-events --input holidays.ics --events events.txt --dry-run
+```
+
 ### 🎯 実用的な使用例
 
 #### シナリオ1: 年次祝日カレンダーの作成
@@ -489,7 +504,20 @@ python main.py export japanese-holidays-2024 --output updated_2024.ics
 python main.py compare-ics backup_2024.ics updated_2024.ics --format semantic --color
 ```
 
-#### シナリオ4: 日曜祝日の管理
+#### シナリオ4: カスタムイベントの統合
+```bash
+# 祝日カレンダーにメンテナンス期間を追加
+echo -e "メンテナンス\t2025-12-28T02:00:00\t2025-12-28T06:00:00" > maintenance.txt
+echo -e "年末休業\t2025-12-29\t2026-01-03" >> maintenance.txt
+
+python main.py holidays --year 2025 --output base_holidays.ics
+python main.py add-events --input base_holidays.ics --events maintenance.txt --output complete_calendar.ics
+
+# 結果を確認
+python main.py analyze-ics complete_calendar.ics
+```
+
+#### シナリオ5: 日曜祝日の管理
 ```bash
 # 日曜祝日を除外したカレンダー（デフォルト）
 python main.py holidays --year 2024 --output holidays_exclude_sunday.ics
@@ -522,6 +550,55 @@ python main.py update-calendar japanese-holidays-$next_year --year $next_year
 python main.py system-metrics
 
 echo "=== メンテナンス完了 ==="
+```
+
+### 📝 カスタムイベントファイル形式
+
+#### サポートされるファイル形式
+
+**タブ区切り形式（推奨）:**
+```
+イベント名	開始日時	終了日時
+休業日	2025-10-23T18:00:00	2025-10-23T18:30:00
+休業日	2025-10-24T13:00:00	2025-10-24T14:00:00
+メンテナンス	2025-11-01	2025-11-02
+年末休業	2025-12-29	
+```
+
+**スペース区切り形式:**
+```
+イベント名 開始日時 終了日時
+休業日 2025-10-23T18:00:00 2025-10-23T18:30:00
+システム停止 2025-11-15 2025-11-16
+```
+
+**カンマ区切り形式:**
+```
+イベント名,開始日時,終了日時
+休業日,2025-10-23T18:00:00,2025-10-23T18:30:00
+定期メンテナンス,2025-12-01T03:00:00,2025-12-01T05:00:00
+```
+
+#### 日時形式
+
+- **時刻指定**: `2025-10-23T18:00:00` または `2025-10-23 18:00:00`
+- **終日イベント**: `2025-10-23` （日付のみ）
+- **終了時間省略**: 開始日時のみ指定で終日イベント
+
+#### ファイル作成例
+
+```bash
+# サンプルイベントファイルを作成
+cat > custom_events.txt << 'EOF'
+# カスタムイベントリスト
+イベント名	開始日時	終了日時
+システムメンテナンス	2025-12-28T02:00:00	2025-12-28T06:00:00
+年末年始休業	2025-12-29	2026-01-03
+定期点検	2025-11-15T20:00:00	2025-11-15T22:00:00
+EOF
+
+# ICSファイルに追加
+python main.py add-events --input holidays.ics --events custom_events.txt --output complete_calendar.ics
 ```
 
 ### 🔧 高度なオプション
